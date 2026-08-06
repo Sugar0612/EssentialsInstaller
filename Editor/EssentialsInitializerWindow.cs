@@ -30,7 +30,7 @@ namespace SUG.Essentials.Editor
 
         private Queue<DependencyInfo> _installQueue = new Queue<DependencyInfo>();
 
-        private const string EssentialsGit = "https://github.com/Sugar0612/Essentials/tree/main/Assets/Essentials";
+        private const string EssentialsGit = "https://github.com/Sugar0612/Essentials.git?path=Assets/Essentials";
 
         [MenuItem("Tools/Essentials/Initialization")]
         public static void Open()
