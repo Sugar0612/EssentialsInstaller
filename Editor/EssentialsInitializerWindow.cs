@@ -26,11 +26,11 @@ namespace SUG.Essentials.Editor
 
         private float _loadingTimer;
 
-        private int _installIndex;
+        //private int _installIndex;
 
         private Queue<DependencyInfo> _installQueue = new Queue<DependencyInfo>();
 
-        private const string EssentialsGit = "https://github.com/Sugar0612/Essentials.git?path=Assets/Essentials";
+        private const string EssentialsGit = "https://github.com/Sugar0612/Essentials.git?path=Assets/Essentials#1.0.1";
 
         [MenuItem("Tools/Essentials/Initialization")]
         public static void Open()
