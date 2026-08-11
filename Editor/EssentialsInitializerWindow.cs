@@ -30,12 +30,11 @@ namespace SUG.Essentials.Editor
 
         private Queue<DependencyInfo> _installQueue = new Queue<DependencyInfo>();
 
-        private const string EssentialsGit = "https://github.com/Sugar0612/Essentials.git?path=Assets/Essentials#1.0.1";
+        private const string EServicesGit = "https://github.com/Sugar0612/Essentials-Services.git?path=Assets/EssentialsServices#1.0.0";
 
         [MenuItem("Tools/Essentials/Initialization")]
         public static void Open()
         {
-
             var window =
                 GetWindow<EssentialsInitializerWindow>("Essentials Initialization");
 
@@ -73,15 +72,23 @@ namespace SUG.Essentials.Editor
                     "Addressables",
                     "com.unity.addressables",
                     DependencyType.UnityPackage,
-                    CheckAddressables
+                    CheckPackageVaild
                 ),
 
                 new DependencyInfo(
                     "DOTween",
                     "DOTween",
                     DependencyType.External,
-                    CheckDOTween,
+                    CheckPackageVaild,
                     "https://assetstore.unity.com/packages/tools/animation/dotween-hotween-v2-27676"
+                ),
+
+
+                new DependencyInfo(
+                    "Essentials DI",
+                    "https://github.com/Sugar0612/Essentials.git?path=Assets/Essentials#1.1.0",
+                    DependencyType.UnityPackage,
+                    CheckPackageVaild
                 )
             };
         }
@@ -112,23 +119,23 @@ namespace SUG.Essentials.Editor
 
             _installingEssentials = true;
 
-            _addRequest = Client.Add(EssentialsGit);
+            _addRequest = Client.Add(EServicesGit);
         }
 
-        private void FixAll()
-        {
-            _installQueue.Clear();
+        //private void FixAll()
+        //{
+        //    _installQueue.Clear();
 
-            foreach (var dep in _dependencies)
-            {
-                if (!dep.IsInstalled())
-                {
-                    _installQueue.Enqueue(dep);
-                }
+        //    foreach (var dep in _dependencies)
+        //    {
+        //        if (!dep.IsInstalled(dep.Id, dep.Type))
+        //        {
+        //            _installQueue.Enqueue(dep);
+        //        }
 
-            }
-            InstallNext();
-        }
+        //    }
+        //    InstallNext();
+        //}
 
         private void InstallNext()
         {
@@ -190,13 +197,25 @@ namespace SUG.Essentials.Editor
             {
                 _installingEssentials = false;
                 _addRequest = null;
-                Debug.Log("Essentials installed.");
             }
 
             Refresh();
 
             Repaint();
         }
+
+        private bool AllDependenciesInstalled()
+        {
+            foreach (var dep in _dependencies)
+            {
+                if (!dep.IsInstalled(dep.Id, dep.Type))
+                    return false;
+            }
+
+            return true;
+        }
+
+        #region OnGUI
 
         private void OnGUI()
         {
@@ -212,14 +231,14 @@ namespace SUG.Essentials.Editor
                 MessageType.Info
             );
 
-            GUILayout.Space(10);
+            //GUILayout.Space(10);
 
-            GUI.backgroundColor = Color.green;
+            //GUI.backgroundColor = Color.green;
 
-            if (GUILayout.Button("Fix All Dependencies", GUILayout.Height(35)))
-            {
-                FixAll();
-            }
+            //if (GUILayout.Button("Fix All Dependencies", GUILayout.Height(35)))
+            //{
+            //    FixAll();
+            //}
 
             GUI.backgroundColor = Color.white;
 
@@ -236,12 +255,15 @@ namespace SUG.Essentials.Editor
 
             GUILayout.Space(20);
 
-            DrawEssentialsInstall();
+            DrawEssServicesInstall();
         }
 
+        /// <summary>
+        /// 依赖面板绘制
+        /// </summary>
+        /// <param name="dep"></param>
         private void DrawDependency(DependencyInfo dep)
         {
-
             EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
 
             GUILayout.Label(
@@ -255,17 +277,14 @@ namespace SUG.Essentials.Editor
             {
                 DrawSpinner();
             }
-            else if (dep.IsInstalled())
+            else if (dep.IsInstalled(dep.Id, dep.Type))
             {
 
                 dep.State = DependencyState.Installed;
 
                 GUI.color = Color.green;
 
-                GUILayout.Label(
-                    "✔ Installed",
-                    GUILayout.Width(120)
-                );
+                GUILayout.Label("✔ Installed", GUILayout.Width(120));
 
                 GUI.color = Color.white;
             }
@@ -283,9 +302,12 @@ namespace SUG.Essentials.Editor
             EditorGUILayout.EndHorizontal();
         }
 
-        private void DrawEssentialsInstall()
+        /// <summary>
+        /// EssServices安装面板绘制
+        /// </summary>
+        private void DrawEssServicesInstall()
         {
-
+            // TODO...
             GUILayout.Space(10);
 
             bool enable = AllDependenciesInstalled();
@@ -298,7 +320,7 @@ namespace SUG.Essentials.Editor
             }
             else
             {
-                if (GUILayout.Button("Install Essentials", GUILayout.Height(35)))
+                if (GUILayout.Button("Install Essentials's Services", GUILayout.Height(35)))
                 {
                     InstallEssentials();
                 }
@@ -329,37 +351,32 @@ namespace SUG.Essentials.Editor
             Handles.EndGUI();
         }
 
-        private bool AllDependenciesInstalled()
+        #endregion
+
+        #region CheckPackage
+
+        private static bool CheckPackageVaild(string id, DependencyType type)
         {
-            foreach (var dep in _dependencies)
+            if (type == DependencyType.UnityPackage)
             {
-                if (!dep.IsInstalled())
-                    return false;
+                var package = UnityEditor.PackageManager.PackageInfo.FindForPackageName(id);
+                return package != null;
             }
 
-            return true;
-        }
-
-        private static bool CheckAddressables()
-        {
-
-            var package = UnityEditor.PackageManager.PackageInfo.FindForPackageName("com.unity.addressables");
-
-            return package != null;
-        }
-
-        private static bool CheckDOTween()
-        {
-            foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
+            if (type == DependencyType.External)
             {
-                if (asm.GetName().Name == "DOTween")
+                foreach (var asm in AppDomain.CurrentDomain.GetAssemblies())
                 {
-                    return true;
+                    if (asm.GetName().Name == id)
+                    {
+                        return true;
+                    }
                 }
             }
-
             return false;
         }
+
+        #endregion
 
         private enum DependencyType
         {
@@ -397,10 +414,11 @@ namespace SUG.Essentials.Editor
 
             public DependencyState State = DependencyState.NotInstalled;
 
-            private Func<bool> _checker;
+            private Func<string, DependencyType, bool> _checker;
 
-            public DependencyInfo(string name, string id, DependencyType type, Func<bool> checker, string url = null)
+            public DependencyInfo(string name, string id, DependencyType type, Func<string, DependencyType, bool> checker, string url = null)
             {
+                // TODO...
                 Name = name;
 
                 Id = id;
@@ -411,17 +429,17 @@ namespace SUG.Essentials.Editor
 
                 _checker = checker;
 
-                if (_checker())
+                if (_checker(id, type))
                 {
                     State = DependencyState.Installed;
                 }
             }
 
-            public bool IsInstalled()
+            public bool IsInstalled(string id, DependencyType type)
             {
                 try
                 {
-                    return _checker();
+                    return _checker(id, type);
                 }
                 catch (Exception e)
                 {
