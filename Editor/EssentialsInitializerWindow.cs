@@ -86,9 +86,10 @@ namespace SUG.Essentials.Editor
 
                 new DependencyInfo(
                     "Essentials DI",
-                    "https://github.com/Sugar0612/Essentials.git?path=Assets/Essentials#1.1.0",
-                    DependencyType.UnityPackage,
-                    CheckPackageVaild
+                    "com.sug.essentials",
+                    DependencyType.GitHub,
+                    CheckPackageVaild,
+                    "https://github.com/Sugar0612/Essentials.git?path=Assets/Essentials#1.1.0"
                 )
             };
         }
@@ -108,6 +109,12 @@ namespace SUG.Essentials.Editor
 
                 case DependencyType.External:
                     Application.OpenURL(dep.Url);
+                    break;
+
+                case DependencyType.GitHub:
+                    dep.State = DependencyState.Installing;
+                    _currentInstalling = dep;
+                    _addRequest = Client.Add(dep.Url);
                     break;
             }
         }
@@ -291,7 +298,7 @@ namespace SUG.Essentials.Editor
             else
             {
 
-                string button = dep.Type == DependencyType.UnityPackage ? "Install" : "Open Page";
+                string button = dep.Type == DependencyType.External ? "Open Page" : "Install";
 
                 if (GUILayout.Button(button,GUILayout.Width(120)))
                 {
@@ -373,6 +380,13 @@ namespace SUG.Essentials.Editor
                     }
                 }
             }
+
+            if (type == DependencyType.GitHub)
+            {
+                var package = UnityEditor.PackageManager.PackageInfo.FindForPackageName(id);
+                return package != null;
+            }
+
             return false;
         }
 
@@ -380,12 +394,9 @@ namespace SUG.Essentials.Editor
 
         private enum DependencyType
         {
-
             UnityPackage,
-
-
-            External
-
+            External,
+            GitHub,
         }
 
         private enum DependencyState
