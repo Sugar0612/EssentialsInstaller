@@ -228,10 +228,30 @@ namespace SUG.Essentials.Editor
         {
             GUILayout.Space(10);
 
+            var titleStyle = new GUIStyle(EditorStyles.boldLabel);
+            titleStyle.margin = new RectOffset(0, 0, 0, 0);
+            titleStyle.padding = new RectOffset(0, 0, 2, 0);
+
+            var statusStyle = new GUIStyle(EditorStyles.miniBoldLabel);
+            statusStyle.alignment = TextAnchor.MiddleLeft;
+            statusStyle.margin = new RectOffset(8, 0, 0, 0);
+            statusStyle.padding = new RectOffset(0, 0, 0, 0);
+
+            EditorGUILayout.BeginHorizontal(EditorStyles.toolbar, GUILayout.Height(24));
+
             GUILayout.Label(
                 "Essentials Initialization",
-                EditorStyles.boldLabel
+                titleStyle
             );
+
+            var ready = AllDependenciesInstalled() ? "Ready" : "Not Ready";
+            var statusColor = AllDependenciesInstalled() ? Color.green : new Color(1f, 0.8f, 0.2f);
+
+            GUI.contentColor = statusColor;
+            GUILayout.Label(ready, statusStyle, GUILayout.Height(18));
+            GUI.contentColor = Color.white;
+
+            EditorGUILayout.EndHorizontal();
 
             EditorGUILayout.HelpBox(
                 "Essentials requires the following dependencies.",
@@ -271,11 +291,13 @@ namespace SUG.Essentials.Editor
         /// <param name="dep"></param>
         private void DrawDependency(DependencyInfo dep)
         {
-            EditorGUILayout.BeginHorizontal(EditorStyles.helpBox);
+            EditorGUILayout.BeginHorizontal(EditorStyles.helpBox, GUILayout.Height(36));
 
+            GUILayout.Space(8);
             GUILayout.Label(
                 dep.Name,
-                GUILayout.Width(150)
+                GUILayout.Width(150),
+                GUILayout.Height(18)
             );
 
             GUILayout.FlexibleSpace();
@@ -286,26 +308,23 @@ namespace SUG.Essentials.Editor
             }
             else if (dep.IsInstalled(dep.Id, dep.Type))
             {
-
                 dep.State = DependencyState.Installed;
 
-                GUI.color = Color.green;
-
-                GUILayout.Label("✔ Installed", GUILayout.Width(120));
-
+                GUI.color = new Color(0.3f, 0.9f, 0.4f);
+                GUILayout.Label("✔ Installed", GUILayout.Width(120), GUILayout.Height(18));
                 GUI.color = Color.white;
             }
             else
             {
-
                 string button = dep.Type == DependencyType.External ? "Open Page" : "Install";
 
-                if (GUILayout.Button(button,GUILayout.Width(120)))
+                if (GUILayout.Button(button, GUILayout.Width(120), GUILayout.Height(22)))
                 {
                     Install(dep);
                 }
             }
 
+            GUILayout.Space(8);
             EditorGUILayout.EndHorizontal();
         }
 
@@ -314,11 +333,15 @@ namespace SUG.Essentials.Editor
         /// </summary>
         private void DrawEssServicesInstall()
         {
-            // TODO...
             GUILayout.Space(10);
 
-            bool enable = AllDependenciesInstalled();
+            EditorGUILayout.BeginHorizontal(EditorStyles.helpBox, GUILayout.Height(40));
 
+            GUILayout.Space(8);
+            GUILayout.Label("Essentials Services", GUILayout.Width(150), GUILayout.Height(18));
+            GUILayout.FlexibleSpace();
+
+            bool enable = AllDependenciesInstalled();
             GUI.enabled = enable && !_installingEssentials;
 
             if (_installingEssentials)
@@ -327,13 +350,15 @@ namespace SUG.Essentials.Editor
             }
             else
             {
-                if (GUILayout.Button("Install Essentials's Services", GUILayout.Height(35)))
+                if (GUILayout.Button("Install", GUILayout.Width(120), GUILayout.Height(22)))
                 {
                     InstallEssentials();
                 }
             }
 
             GUI.enabled = true;
+            GUILayout.Space(8);
+            EditorGUILayout.EndHorizontal();
 
             if (!enable)
             {
