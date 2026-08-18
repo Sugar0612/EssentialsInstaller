@@ -32,6 +32,7 @@ namespace SUG.Essentials.Editor
         private ServiceInfo _currentInstallingService;
 
         private float _loadingTimer;
+        private float _loadingStartedAt;
         private float _lastStateCheck;
 
         private string _errorMessage;
@@ -113,7 +114,17 @@ namespace SUG.Essentials.Editor
 
         private void OnEnable()
         {
-            InitializeStyles();
+            /*
+             * Do NOT build GUI styles here.
+             *
+             * OnEnable can fire while the Editor is
+             * still loading (e.g. the auto initializer
+             * opens this window from a delayCall), and
+             * EditorStyles.* throws a
+             * NullReferenceException before the editor
+             * GUI skin exists. Styles are created
+             * lazily on the first OnGUI pass instead.
+             */
             Refresh();
         }
 
@@ -137,7 +148,17 @@ namespace SUG.Essentials.Editor
         {
             if (IsInstalling())
             {
-                _loadingTimer += Time.deltaTime;
+                /*
+                 * Drive the animation from real time.
+                 *
+                 * Time.deltaTime is unreliable in the
+                 * Editor outside of Play mode, so the
+                 * timer is derived from
+                 * Time.realtimeSinceStartup instead.
+                 */
+                _loadingTimer =
+                    Time.realtimeSinceStartup -
+                    _loadingStartedAt;
 
                 Repaint();
             }
@@ -313,9 +334,8 @@ namespace SUG.Essentials.Editor
                 _currentInstalling =
                     dependency;
 
-                _loadingTimer = 0f;
-
-                _errorMessage = null;
+                _loadingStartedAt =
+                    Time.realtimeSinceStartup;
 
                 Debug.Log(
                     $"[Essentials] Installing dependency: {dependency.Name}\n" +
@@ -353,6 +373,8 @@ namespace SUG.Essentials.Editor
         {
             if (IsInstalling())
                 return;
+
+            _errorMessage = null;
 
             _installQueue.Clear();
 
@@ -426,9 +448,8 @@ namespace SUG.Essentials.Editor
                 _currentInstallingService =
                     service;
 
-                _loadingTimer = 0f;
-
-                _errorMessage = null;
+                _loadingStartedAt =
+                    Time.realtimeSinceStartup;
 
                 Debug.Log(
                     $"[Essentials] Installing service: {service.Name}\n" +
@@ -509,22 +530,61 @@ namespace SUG.Essentials.Editor
             }
             else
             {
-                LogPackageManagerError(
-                    request,
-                    installingDependency,
-                    installingService
-                );
+                /*
+                 * UPM can report StatusCode.Failure with
+                 * a null Error even though the package
+                 * was actually installed (a known quirk
+                 * when the request outlives a domain
+                 * reload). Trust the real state over the
+                 * request status: re-check the target and
+                 * only treat it as failed when it is
+                 * genuinely still missing.
+                 */
+                bool actuallyInstalled =
+                    IsActuallyInstalled(
+                        installingDependency,
+                        installingService
+                    );
 
-                if (installingDependency != null)
+                if (actuallyInstalled)
                 {
-                    installingDependency.State =
-                        DependencyState.NotInstalled;
+                    Debug.Log(
+                        "[Essentials] Package was installed " +
+                        "despite the failure status; " +
+                        "treating as success."
+                    );
+
+                    if (installingDependency != null)
+                    {
+                        installingDependency.State =
+                            DependencyState.Installed;
+                    }
+
+                    if (installingService != null)
+                    {
+                        installingService.State =
+                            ServiceState.Installed;
+                    }
                 }
-
-                if (installingService != null)
+                else
                 {
-                    installingService.State =
-                        ServiceState.NotInstalled;
+                    LogPackageManagerError(
+                        request,
+                        installingDependency,
+                        installingService
+                    );
+
+                    if (installingDependency != null)
+                    {
+                        installingDependency.State =
+                            DependencyState.NotInstalled;
+                    }
+
+                    if (installingService != null)
+                    {
+                        installingService.State =
+                            ServiceState.NotInstalled;
+                    }
                 }
             }
 
@@ -595,6 +655,38 @@ namespace SUG.Essentials.Editor
                     : "Package Manager returned no error message.";
 
 
+            if (dependency == null &&
+                service == null)
+            {
+                /*
+                 * The request completed but no target is
+                 * tracked anymore (for example the Editor
+                 * reloaded while the request was in
+                 * flight, or the window was closed and
+                 * the completion arrived late). UPM often
+                 * reports a failure with no error in this
+                 * situation even though the package was
+                 * installed.
+                 *
+                 * There is nothing actionable to display;
+                 * the caller's Refresh() re-checks the
+                 * real state and the cards show the
+                 * actual result.
+                 */
+                Debug.LogWarning(
+                    "[Essentials] Package Manager reported a failure " +
+                    "for an untracked request " +
+                    "(likely a stale request from a domain reload).\n" +
+                    $"Target: {targetName}\n" +
+                    $"Status: {status}\n" +
+                    $"Error Code: {errorCode}\n" +
+                    $"Error Message: {errorMessage}"
+                );
+
+                return;
+            }
+
+
             string message =
                 $"{targetName} failed: {errorMessage}";
 
@@ -607,6 +699,39 @@ namespace SUG.Essentials.Editor
                 $"Error Code: {errorCode}\n" +
                 $"Error Message: {errorMessage}"
             );
+        }
+
+
+        /// <summary>
+        /// Re-evaluate whether the target that just
+        /// finished a request is actually installed.
+        ///
+        /// A UPM request can report failure even though
+        /// the package landed successfully (notably after
+        /// a domain reload), so the real state wins.
+        /// </summary>
+        private static bool IsActuallyInstalled(
+            DependencyInfo dependency,
+            ServiceInfo service
+        )
+        {
+            if (dependency != null)
+            {
+                dependency.Recheck();
+
+                return dependency.State ==
+                    DependencyState.Installed;
+            }
+
+            if (service != null)
+            {
+                service.Recheck();
+
+                return service.State ==
+                    ServiceState.Installed;
+            }
+
+            return false;
         }
 
         #endregion
@@ -793,7 +918,8 @@ namespace SUG.Essentials.Editor
 
         private void OnGUI()
         {
-            InitializeStyles();
+            if (!InitializeStyles())
+                return;
 
             DrawHeader();
 
@@ -951,7 +1077,7 @@ namespace SUG.Essentials.Editor
                 text = "Installing" +
                        new string(
                            '.',
-                           1 + (int)(_loadingTimer * 2f) % 3
+                           1 + (int)(_loadingTimer * 1.5f) % 3
                        );
 
                 color = GetInstallingColor();
@@ -1075,7 +1201,7 @@ namespace SUG.Essentials.Editor
              * Package Manager request is in flight.
              */
             float t =
-                (_loadingTimer * 0.6f) % 1f;
+                (_loadingTimer * 0.5f) % 1f;
 
             float segmentWidth =
                 barRect.width * 0.35f;
@@ -1276,7 +1402,11 @@ namespace SUG.Essentials.Editor
                 tooltip,
                 90f,
                 24f,
-                () => Install(dependency)
+                () =>
+                {
+                    _errorMessage = null;
+                    Install(dependency);
+                }
             );
 
             GUI.enabled = true;
@@ -1433,7 +1563,11 @@ namespace SUG.Essentials.Editor
                 "Installs this service via Unity Package Manager.",
                 90f,
                 24f,
-                () => InstallService(service)
+                () =>
+                {
+                    _errorMessage = null;
+                    InstallService(service);
+                }
             );
 
             GUI.enabled = true;
@@ -1602,7 +1736,7 @@ namespace SUG.Essentials.Editor
         )
         {
             float angle =
-                (_loadingTimer * 240f) % 360f;
+                (_loadingTimer * 180f) % 360f;
 
             Vector3 start =
                 new Vector3(
@@ -2268,10 +2402,20 @@ namespace SUG.Essentials.Editor
 
         #region GUI Styles
 
-        private void InitializeStyles()
+        private bool InitializeStyles()
         {
             if (_titleStyle != null)
-                return;
+                return true;
+
+            /*
+             * EditorStyles.* is only safe to touch once
+             * the editor GUI skin exists. On very early
+             * frames (domain reload / startup) the skin
+             * may still be missing, so defer to the next
+             * OnGUI pass instead of crashing.
+             */
+            if (GUI.skin == null)
+                return false;
 
 
             _titleStyle =
@@ -2394,6 +2538,9 @@ namespace SUG.Essentials.Editor
                 {
                     fontSize = 10
                 };
+
+
+            return true;
         }
 
         #endregion
